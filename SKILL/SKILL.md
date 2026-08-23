@@ -1,19 +1,19 @@
 ---
-name: daily-arxiv-ai-enhanced
+name: daily-management-ai-enhanced
 version: 0.1
-description: 通过URL请求，从daily-arxiv-ai-enhanced项目中获取论文json数据
+description: 通过URL请求，从Daily Management AI Enhanced项目中获取论文json数据
 ---
 
 # arXiv论文数据API
 
 ## 触发条件
-用户想要获取daily-arXiv-ai-enhanced项目中的数据
+用户想要获取Daily Management AI Enhanced项目中的数据
 
 ## 功能说明
 通过URL参数获取JSON格式的arXiv论文数据
 
 ## 基础仓库 URL
-https://dw-dengwei.github.io/daily-arXiv-ai-enhanced/
+https://multimagnetars.github.io/daily-management-ai-enhanced/
 
 ## URL参数
 
@@ -25,7 +25,7 @@ https://dw-dengwei.github.io/daily-arXiv-ai-enhanced/
 
 ## 样例
 ```
-bash scripts/fetch.sh "https://dw-dengwei.github.io/daily-arXiv-ai-enhanced/?category=cs.CV&author=Smith&keywords=deep"
+bash scripts/fetch.sh "https://multimagnetars.github.io/daily-management-ai-enhanced/?category=cs.CV&author=Smith&keywords=deep"
 ```
 这里使用到了`fetch.sh`脚本来发送请求并处理响应数据，该脚本基于NodeJS和puppeteer环境，如果没有安装则会自动安装。你不能直接wget或curl这个url，因为它需要执行JavaScript来生成最终的JSON响应。
 

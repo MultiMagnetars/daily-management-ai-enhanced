@@ -259,7 +259,8 @@ class ScixSmokeTests(unittest.TestCase):
             "if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name == 'astro-custom' && inputs.validation_mode == 'scix-e2e' }}",
             workflow,
         )
-        self.assertIn('cron: "30 17 * * *"', workflow)
+        self.assertNotIn("schedule:", workflow)
+        self.assertNotIn('cron: "30 17 * * *"', workflow)
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("validation_mode:", workflow)
         self.assertIn("- normal", workflow)

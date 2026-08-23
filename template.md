@@ -1,12 +1,12 @@
 # About
 This tool will daily crawl https://arxiv.org and use LLMs to summarize them.
 
-See in: https://dw-dengwei.github.io/daily-arXiv-ai-enhanced/
+See in: https://multimagnetars.github.io/daily-management-ai-enhanced/
 
 # How to use
 This repo will daily crawl arXiv papers about **cs.CV, cs.GR and cs.CL**, and use **DeepSeek** to summarize the papers in **Chinese**.
 If you wish to crawl other arXiv categories, use other LLMs or other languages, please follow the bellow instructions.
-Otherwise, you can directly use this repo in https://dw-dengwei.github.io/daily-arXiv-ai-enhanced/ . Please star it if you like :)
+Otherwise, you can directly use this repo in https://multimagnetars.github.io/daily-management-ai-enhanced/ . Please star it if you like :)
 
 **Instructions:**
 1. Fork this repo to your own account
@@ -20,7 +20,7 @@ Otherwise, you can directly use this repo in https://dw-dengwei.github.io/daily-
    3. `MODEL_NAME`: such as "deepseek-chat"
    4. `EMAIL`: your email for push to github
    5. `NAME`: your name for push to github
-7. Go to your-own-repo -> Actions -> arXiv-daily-ai-enhanced
+7. Go to your-own-repo -> Actions -> Daily Management AI Enhanced
 8. You can manually click **Run workflow** to test if it works well (it may takes about one hour). 
 By default, this action will automatically run every day
 You can modify it in `.github/workflows/run.yml`
@@ -39,4 +39,4 @@ You can modify it in `.github/workflows/run.yml`
 
 # Star history
 
-[![Star History Chart](https://api.star-history.com/svg?repos=dw-dengwei/daily-arXiv-ai-enhanced&type=Date)](https://www.star-history.com/#dw-dengwei/daily-arXiv-ai-enhanced&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=MultiMagnetars/daily-management-ai-enhanced&type=Date)](https://www.star-history.com/#MultiMagnetars/daily-management-ai-enhanced&Date)

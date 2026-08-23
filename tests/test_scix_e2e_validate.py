@@ -353,7 +353,7 @@ class ScixE2EValidationTests(unittest.TestCase):
         self.assertEqual("2026arXiv00001V", paper["bibcode"])
         self.assertEqual("10.48550/arxiv.2608.00001", paper["doi"])
 
-    def test_workflow_has_three_validation_modes_and_unaffected_schedule(self):
+    def test_workflow_has_three_validation_modes_and_manual_dispatch_only(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn("validation_mode:", workflow)
         self.assertIn("- normal", workflow)
@@ -361,7 +361,8 @@ class ScixE2EValidationTests(unittest.TestCase):
         self.assertIn("- scix-e2e", workflow)
         self.assertIn("inputs.validation_mode == 'scix-e2e'", workflow)
         self.assertIn("inputs.validation_mode == 'scix-smoke'", workflow)
-        self.assertIn('cron: "30 17 * * *"', workflow)
+        self.assertNotIn("schedule:", workflow)
+        self.assertNotIn('cron: "30 17 * * *"', workflow)
         self.assertIn("python -m daily_arxiv.daily_arxiv.scix_e2e_validate", workflow)
 
     def test_smoke_and_e2e_jobs_do_not_run_normal_build_on_custom_validation(self):
