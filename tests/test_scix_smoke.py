@@ -267,7 +267,6 @@ class ScixSmokeTests(unittest.TestCase):
         self.assertIn("- scix-smoke", workflow)
         self.assertIn("- scix-e2e", workflow)
         self.assertIn("SCIX_API_TOKEN: ${{ secrets.SCIX_API_TOKEN }}", workflow)
-        self.assertIn("SCIX_TOPICAL_TERMS: ${{ vars.SCIX_TOPICAL_TERMS }}", workflow)
         self.assertIn('FILTER_KEYWORDS: ${{ vars.FILTER_KEYWORDS }}', workflow)
         smoke_block = workflow.split("  scix-smoke:", 1)[1].split("\n  scix-e2e:", 1)[0]
         self.assertIn("python -m daily_arxiv.daily_arxiv.scix_smoke", smoke_block)
@@ -280,19 +279,30 @@ class ScixSmokeTests(unittest.TestCase):
         self.assertIn('output-dir "${RUNNER_TEMP}/scix_e2e_output"', e2e_block)
         self.assertNotIn("git push", e2e_block)
 
-    def test_production_scix_calls_are_root_invocable_modules(self):
+    def test_production_normal_path_uses_openalex_and_not_legacy_sources(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        build_block = workflow.split("  build:", 1)[1]
 
+        self.assertIn("- name: Fetch OpenAlex candidates", build_block)
         self.assertIn(
-            "python -m daily_arxiv.daily_arxiv.scix_client \\",
-            workflow,
+            "OPENALEX_SEARCH_TERMS: ${{ vars.OPENALEX_SEARCH_TERMS }}",
+            build_block,
         )
         self.assertIn(
-            "python -m daily_arxiv.daily_arxiv.source_merge \\",
-            workflow,
+            "OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}",
+            build_block,
         )
-        self.assertNotIn("python daily_arxiv/scix_client.py", workflow)
-        self.assertNotIn("python daily_arxiv/source_merge.py", workflow)
+        self.assertIn(
+            "python -m daily_arxiv.daily_arxiv.openalex_client \\",
+            build_block,
+        )
+        self.assertIn('status_file="data/${today}_openalex_status.json"', build_block)
+        self.assertIn('output="data/${today}.jsonl"', build_block)
+        self.assertNotIn("Crawl arXiv papers", build_block)
+        self.assertNotIn("scrapy crawl arxiv", build_block)
+        self.assertNotIn("Fetch and merge SciX candidates", build_block)
+        self.assertNotIn("scix_client", build_block)
+        self.assertNotIn("source_merge", build_block)
 
     def test_production_workflow_wires_same_day_accumulation(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -324,8 +334,9 @@ class ScixSmokeTests(unittest.TestCase):
         cleanup_commands = [line.strip() for line in cleanup_block.splitlines()]
         self.assertNotIn("git clean -fd", cleanup_commands)
         self.assertNotIn("rm -rf data/*", cleanup_commands)
-        self.assertIn("${today}_merge_stats.json", workflow)
-        self.assertIn("${today}_scix_status.json", workflow)
+        self.assertIn("${today}_openalex_status.json", workflow)
+        self.assertNotIn("${today}_merge_stats.json", workflow)
+        self.assertNotIn("${today}_scix_status.json", workflow)
 
         smoke_block = workflow.split("  scix-smoke:", 1)[1].split("\n  scix-e2e:", 1)[0]
         e2e_block = workflow.split("  scix-e2e:", 1)[1].split("\n  build:", 1)[0]

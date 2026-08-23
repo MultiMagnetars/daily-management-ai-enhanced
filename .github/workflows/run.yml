@@ -94,82 +94,33 @@ jobs:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv sync
         
-    - name: Crawl arXiv papers
+    - name: Fetch OpenAlex candidates
       id: crawl_step
-      run: |
-        source .venv/bin/activate
-        today=$(date -u "+%Y-%m-%d")
-        echo "开始爬取 $today 的arXiv论文... / Starting to crawl $today arXiv papers..."
-        
-        # 检查今日文件是否已存在，如存在则删除 / Check if today's file exists, delete if found
-        if [ -f "data/${today}.jsonl" ]; then
-            echo "🗑️ 发现今日文件已存在，正在删除重新生成... / Found existing today's file, deleting for fresh start..."
-            rm "data/${today}.jsonl"
-            echo "✅ 已删除现有文件：data/${today}.jsonl / Deleted existing file: data/${today}.jsonl"
-        else
-            echo "📝 今日文件不存在，准备新建... / Today's file doesn't exist, ready to create new one..."
-        fi
-        
-        cd daily_arxiv
-        export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-        export OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }}
-        export TOKEN_GITHUB=${{ secrets.TOKEN_GITHUB }}
-        export LANGUAGE="${{ vars.LANGUAGE }}"
-        export CATEGORIES="${{ vars.CATEGORIES }}"
-        export MODEL_NAME="${{ vars.MODEL_NAME }}"
-        
-        # 使用Scrapy爬取
-        # Use Scrapy to crawl
-        scrapy crawl arxiv -o ../data/${today}.jsonl
-        
-        # 检查爬取是否成功 / Check if crawling was successful
-        if [ ! -f "../data/${today}.jsonl" ]; then
-            echo "爬取失败，未生成数据文件 / Crawling failed, no data file generated"
-            exit 1
-        fi
-
-        # 在去重前保存完整原始抓取结果 / Preserve the complete crawl before deduplication
-        cp "../data/${today}.jsonl" "../data/${today}_raw.jsonl"
-        
-        echo "crawl_date=$today" >> $GITHUB_OUTPUT
-        echo "爬取完成 / Crawling completed"
-
-    - name: Fetch and merge SciX candidates
-      id: scix_merge_step
       env:
-        SCIX_API_TOKEN: ${{ secrets.SCIX_API_TOKEN }}
-        SCIX_TOPICAL_TERMS: ${{ vars.SCIX_TOPICAL_TERMS }}
+        OPENALEX_SEARCH_TERMS: ${{ vars.OPENALEX_SEARCH_TERMS }}
+        OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
       run: |
         set -euo pipefail
         source .venv/bin/activate
-        today="${{ steps.crawl_step.outputs.crawl_date }}"
+        today=$(date -u "+%Y-%m-%d")
         start_date=$(date -u -d "${today} - 3 days" "+%Y-%m-%d")
-        scix_raw="data/${today}_scix_raw.jsonl"
-        scix_status="data/${today}_scix_status.json"
+        output="data/${today}.jsonl"
+        status_file="data/${today}_openalex_status.json"
 
-        # An empty raw file means SciX is disabled/unavailable; it never
-        # replaces the complete arXiv raw file.
-        : > "$scix_raw"
-        if [ -z "${SCIX_API_TOKEN:-}" ]; then
-          echo "SciX disabled: SCIX_API_TOKEN not set"
-          echo "scix_status=unavailable" >> "$GITHUB_OUTPUT"
-        else
-          python -m daily_arxiv.daily_arxiv.scix_client \
-            --start-date "$start_date" \
-            --end-date "$today" \
-            --output "$scix_raw" \
-            --status-file "$scix_status"
-          scix_status_value=$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["status"])' "$scix_status")
-          echo "SciX status: $scix_status_value"
-          echo "scix_status=$scix_status_value" >> "$GITHUB_OUTPUT"
+        rm -f "$output" "$status_file"
+        python -m daily_arxiv.daily_arxiv.openalex_client \
+          --start-date "$start_date" \
+          --end-date "$today" \
+          --output "$output" \
+          --status-file "$status_file"
+
+        if [ ! -f "$output" ]; then
+            echo "OpenAlex failed to produce canonical candidates" >&2
+            exit 1
         fi
 
-        python -m daily_arxiv.daily_arxiv.source_merge \
-          --arxiv "data/${today}_raw.jsonl" \
-          --scix "$scix_raw" \
-          --output "data/${today}.jsonl" \
-          --stats-file "data/${today}_merge_stats.json"
-        echo "SciX normalization and cross-source merge completed"
+        echo "crawl_date=$today" >> "$GITHUB_OUTPUT"
+        echo "OpenAlex candidate acquisition completed"
 
     - name: Restore data branch history for deduplication
       id: history_step
@@ -553,7 +504,7 @@ jobs:
         if git diff --staged --quiet; then
           echo "没有数据变更需要提交 / No data changes to commit"
         else
-          git commit -m "update: $today arXiv papers"
+          git commit -m "update: $today management papers"
           echo "数据变更已提交到 data 分支 / Data changes committed to data branch"
         fi
 
