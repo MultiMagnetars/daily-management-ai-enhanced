@@ -171,11 +171,11 @@ def process_single_item(chain, item: Dict, language: str) -> Dict:
     # Default structure with meaningful fallback values
     default_ai_fields = {
         "abstract_translation": "",
-        "tldr": "Summary generation failed",
-        "motivation": "Motivation analysis unavailable",
-        "method": "Method extraction failed",
-        "result": "Result analysis unavailable",
-        "conclusion": "Conclusion extraction failed"
+        "tldr": "摘要分析暂不可用",
+        "motivation": "研究问题与理论背景分析暂不可用",
+        "method": "数据、样本与研究方法分析暂不可用",
+        "result": "研究结果分析暂不可用",
+        "conclusion": "研究贡献与启示分析暂不可用"
     }
     
     try:
@@ -257,11 +257,11 @@ def process_all_items(data: List[Dict], model_name: str, language: str, max_work
                 processed_data[idx] = data[idx]
                 processed_data[idx]['AI'] = {
                     "abstract_translation": "",
-                    "tldr": "Processing failed",
-                    "motivation": "Processing failed",
-                    "method": "Processing failed",
-                    "result": "Processing failed",
-                    "conclusion": "Processing failed"
+                    "tldr": "摘要分析暂不可用",
+                    "motivation": "研究问题与理论背景分析暂不可用",
+                    "method": "数据、样本与研究方法分析暂不可用",
+                    "result": "研究结果分析暂不可用",
+                    "conclusion": "研究贡献与启示分析暂不可用"
                 }
     
     return processed_data

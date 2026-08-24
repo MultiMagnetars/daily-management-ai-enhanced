@@ -85,23 +85,22 @@ class AbstractTranslationTests(unittest.TestCase):
         self.assertEqual({"language", "title", "content"}, set(prompt.input_variables))
         messages = prompt.format_messages(
             language="Chinese",
-            title="Single-pulse variability of a radio pulsar",
-            content="We report observations of $10^{-6}$ with DM and RM; may suggest...",
+            title="Corporate governance and earnings quality",
+            content="We find a positive association between governance quality and earnings quality; the result may suggest improved reporting.",
         )
         rendered = "\n".join(message.content for message in messages)
-        self.assertIn("Single-pulse variability of a radio pulsar", rendered)
-        self.assertIn("We report observations of", rendered)
-        self.assertIn("10^{-6}", rendered)
+        self.assertIn("Corporate governance and earnings quality", rendered)
+        self.assertIn("We find a positive association", rendered)
         self.assertIn("abstract_translation", rendered)
         self.assertIn("Task 2", rendered)
-        self.assertIn("exactly the six fields", rendered)
+        self.assertIn("exactly these six fields", rendered)
 
     def test_process_single_item_invokes_chain_once_and_writes_six_fields(self):
         chain = CapturingChain()
         item = {
             "id": "test",
-            "title": "A radio pulsar",
-            "summary": "We report observations of a pulsar.",
+            "title": "Digital transformation and firm value",
+            "summary": "We examine the association between digital transformation and firm value.",
         }
 
         result = self.enhance.process_single_item(chain, item, "Chinese")
@@ -110,8 +109,8 @@ class AbstractTranslationTests(unittest.TestCase):
         self.assertEqual(
             {
                 "language": "Chinese",
-                "title": "A radio pulsar",
-                "content": "We report observations of a pulsar.",
+                "title": "Digital transformation and firm value",
+                "content": "We examine the association between digital transformation and firm value.",
             },
             chain.calls[0],
         )
@@ -128,8 +127,8 @@ class AbstractTranslationTests(unittest.TestCase):
                     chain,
                     {
                         "id": "test",
-                        "title": "A radio pulsar",
-                        "summary": "We report observations.",
+                        "title": "Digital transformation and firm value",
+                        "summary": "We examine the association between digital transformation and firm value.",
                     },
                     "Chinese",
                 )
@@ -172,8 +171,8 @@ class AbstractTranslationTests(unittest.TestCase):
         data = [
             {
                 "id": "future-error",
-                "title": "A radio pulsar",
-                "summary": "We report observations.",
+                "title": "Digital transformation and firm value",
+                "summary": "We examine the association between digital transformation and firm value.",
             }
         ]
         with patch.object(

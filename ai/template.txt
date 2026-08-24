@@ -1,8 +1,6 @@
-Analyze the following arXiv paper title and abstract for a researcher in observational radio astronomy.
+Analyze the following management, accounting, corporate finance, governance, ESG, capital-markets, digital-transformation, AI, fintech, or supply-chain research paper.
 
-The supplied title and abstract are the only paper content available. Follow the system instructions for title-and-abstract-only evidence, missing information, exact numbers, units, technical terms, and the six required fields.
-
-Produce the two requested tasks in one structured response. Do not use external knowledge, do not invent details, and do not add fields.
+Use only the supplied title and abstract. The system instructions define the evidence boundary, exact six-field schema, complete translation requirement, terminology, uncertainty preservation, and rules for empirical and non-empirical paper types. Do not use external knowledge, do not invent details, and do not add fields.
 
 Title:
 {title}
@@ -10,11 +8,13 @@ Title:
 Abstract:
 {content}
 
-Task 1 — abstract_translation:
-Translate every sentence of the supplied abstract completely and faithfully into Chinese. Do not summarize, shorten, omit, merge information, reinterpret, explain, add background information, or add external knowledge. Preserve source names, telescope and instrument names, model names, numbers, uncertainty notation, units, frequencies, periods, DM, RM, FRB, TOA, technical abbreviations, equations, LaTeX, symbols, and evidence strength. The title may help disambiguate terminology, but do not add title information absent from the abstract.
+Task 1 — abstract_translation
+Translate every sentence of the supplied abstract completely and faithfully into professional Chinese, in the original order. Do not summarize, shorten, omit, merge, reinterpret, explain, add background, or add title information absent from the abstract. Preserve all numbers, years, percentages, coefficients, p-values, confidence intervals, model and database names, variable abbreviations, DOI, URL, LaTeX, equations, symbols, and evidence strength. Keep ESG, CSR, and MD&A abbreviations according to the terminology rules. If the abstract has no content, return exactly “摘要未提供可翻译内容。”
 
-Task 2 — scientific analysis:
-Using only the supplied title and abstract, generate the independent scientific analysis fields tldr, motivation, method, result, and conclusion according to the system instructions. The analysis must not replace or shorten abstract_translation.
+Task 2 — management research analysis
+Using only the title and abstract, generate tldr, motivation, method, result, and conclusion. Adapt the analysis to the paper type actually described, including empirical, review, systematic review, bibliometric, theoretical, conceptual, survey, experiment, case, methodological, dataset, or preprint work. Describe what methods are stated, not what methods were not used; never infer an unreported negative method claim. Do not infer a literature gap from a stated contribution. Distinguish mechanism, moderation, and heterogeneity: label explicit moderation as 调节效应, and label subgroup differences as 异质性 or 分组差异 unless the abstract explicitly states an interaction or moderating effect. Do not assume a listed-firm sample, a panel design, a causal effect, a theory, a mechanism, heterogeneity, or policy advice unless explicitly stated. In particular, correlation or association must not be rewritten as causation. Use “摘要未说明。” for missing analysis details.
 
-Return exactly these six fields:
+Return exactly these six fields in this order:
 abstract_translation, tldr, motivation, method, result, conclusion.
+
+Every field value must be a string. Do not return research_question, theory, data_sample, mechanism, heterogeneity, contribution, or any other extra field. Do not include Markdown headings or commentary outside the six structured fields.
