@@ -651,6 +651,13 @@ main {
   overflow: visible;
 }
 
+.paper-card-journal {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* 作者列表项样式 */
 .paper-card-authors .author-item {
   display: inline;

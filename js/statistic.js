@@ -727,7 +727,11 @@ function parseJsonlData(jsonlText, date) {
         return;
       }
       
-      let allCategories = Array.isArray(paper.categories) ? paper.categories : [paper.categories];
+      let allCategories = (Array.isArray(paper.categories) ? paper.categories : [paper.categories])
+        .filter(category => typeof category === 'string' && category.trim());
+      if (allCategories.length === 0) {
+        return;
+      }
       
       const primaryCategory = allCategories[0];
       
@@ -738,18 +742,28 @@ function parseJsonlData(jsonlText, date) {
       const summary = paper.AI && paper.AI.tldr ? paper.AI.tldr : paper.summary;
       
       result[primaryCategory].push({
-        title: paper.title,
-        url: paper.abs || paper.pdf || `https://arxiv.org/abs/${paper.id}`,
-        authors: Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors,
+        title: typeof paper.title === 'string' ? paper.title : '',
+        url: (paper.links && typeof paper.links.landing === 'string' && /^https?:\/\//i.test(paper.links.landing))
+          ? paper.links.landing
+          : (typeof paper.abs === 'string' && /^https?:\/\//i.test(paper.abs) ? paper.abs : ''),
+        authors: Array.isArray(paper.authors)
+          ? paper.authors.filter(author => typeof author === 'string' && author.trim()).join(', ')
+          : (typeof paper.authors === 'string' ? paper.authors : ''),
         category: allCategories,
-        summary: summary,
-        details: paper.summary || '',
+        summary: typeof summary === 'string' ? summary : '',
+        details: typeof paper.summary === 'string' ? paper.summary : '',
         date: date,
-        id: paper.id,
-        motivation: paper.AI && paper.AI.motivation ? paper.AI.motivation : '',
-        method: paper.AI && paper.AI.method ? paper.AI.method : '',
-        result: paper.AI && paper.AI.result ? paper.AI.result : '',
-        conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : ''
+        published: typeof paper.published === 'string' ? paper.published : '',
+        id: typeof paper.id === 'string' ? paper.id : '',
+        doi: typeof paper.doi === 'string' ? paper.doi : '',
+        journal: typeof paper.journal === 'string' ? paper.journal : '',
+        source_name: typeof paper.source_name === 'string' ? paper.source_name : '',
+        source: typeof paper.source === 'string' ? paper.source : '',
+        links: paper.links && typeof paper.links === 'object' ? paper.links : {},
+        motivation: paper.AI && typeof paper.AI.motivation === 'string' ? paper.AI.motivation : '',
+        method: paper.AI && typeof paper.AI.method === 'string' ? paper.AI.method : '',
+        result: paper.AI && typeof paper.AI.result === 'string' ? paper.AI.result : '',
+        conclusion: paper.AI && typeof paper.AI.conclusion === 'string' ? paper.AI.conclusion : ''
       });
     } catch (error) {
       console.error('解析JSON行失败:', error, line);

@@ -282,8 +282,8 @@ if (!paper.abstractTranslation) throw new Error('translation was not parsed');
 context.showPaperDetails(paper, 1);
 let html = element('modalBody').innerHTML;
 if (!element('modalTitle').innerHTML.includes('J1637$-$4642')) throw new Error('title LaTeX was not preserved');
-if (!html.includes('<details open><summary>中文直译')) throw new Error('Chinese translation is not expanded');
-if (!html.includes('<summary>English original</summary>')) throw new Error('English original is missing');
+if (!html.includes('<details open><summary>中文摘要')) throw new Error('Chinese translation is not expanded');
+if (!html.includes('<summary>英文摘要</summary>')) throw new Error('English original is missing');
 if (html.includes('<script>alert(1)</script>') || html.includes('<img src=x')) throw new Error('translation HTML was not escaped');
 if (!html.includes('&lt;script&gt;')) throw new Error('escaped translation is missing');
 const maliciousTitlePaper = Object.assign({}, paper, {
@@ -330,8 +330,8 @@ const oldPaper = oldParsed['astro-ph.HE'][0];
 if (oldPaper.abstractTranslation !== '') throw new Error('old data fallback failed');
 context.showPaperDetails(oldPaper, 1);
 html = element('modalBody').innerHTML;
-if (html.includes('中文直译')) throw new Error('old data rendered empty translation');
-if (!html.includes('English original')) throw new Error('old data lost English original');
+if (html.includes('中文摘要')) throw new Error('old data rendered empty translation');
+if (!html.includes('英文摘要')) throw new Error('old data lost English original');
 
 const missingSummaryRecord = Object.assign({}, oldRecord, {
   AI: Object.assign({}, oldRecord.AI)

@@ -897,7 +897,7 @@ async function loadPapersByDate(date) {
 function parseJsonlData(jsonlText, date) {
   const result = {};
   
-  const lines = jsonlText.trim().split('\n');
+  const lines = typeof jsonlText === 'string' ? jsonlText.trim().split('\n') : [];
   
   lines.forEach(line => {
     try {
@@ -907,7 +907,12 @@ function parseJsonlData(jsonlText, date) {
         return;
       }
       
-      let allCategories = Array.isArray(paper.categories) ? paper.categories : [paper.categories];
+      const allCategories = (Array.isArray(paper.categories) ? paper.categories : [paper.categories])
+        .map(category => normalizeDisplayText(category).trim())
+        .filter(Boolean);
+      if (allCategories.length === 0) {
+        return;
+      }
       
       const primaryCategory = allCategories[0];
       
@@ -915,29 +920,40 @@ function parseJsonlData(jsonlText, date) {
         result[primaryCategory] = [];
       }
       
-      const summary = paper.AI && paper.AI.tldr ? paper.AI.tldr : paper.summary;
+      const summary = normalizeDisplayText(paper.AI && paper.AI.tldr ? paper.AI.tldr : paper.summary);
       const abstractTranslation =
         paper.AI && typeof paper.AI.abstract_translation === 'string'
           ? paper.AI.abstract_translation
           : '';
+      const authors = Array.isArray(paper.authors)
+        ? paper.authors.map(author => normalizeDisplayText(author).trim()).filter(Boolean).join(', ')
+        : normalizeDisplayText(paper.authors).trim();
+      const links = getPaperLinks(paper);
       
       result[primaryCategory].push({
-        title: paper.title,
-        url: paper.abs || paper.pdf || `https://arxiv.org/abs/${paper.id}`,
-        authors: Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors,
+        title: normalizeDisplayText(paper.title),
+        url: getPaperLandingUrl(paper),
+        authors: authors,
         category: allCategories,
         summary: summary,
-        details: paper.summary || '',
+        details: normalizeDisplayText(paper.summary),
         abstractTranslation: abstractTranslation,
         date: date,
-        id: paper.id,
-        motivation: paper.AI && paper.AI.motivation ? paper.AI.motivation : '',
-        method: paper.AI && paper.AI.method ? paper.AI.method : '',
-        result: paper.AI && paper.AI.result ? paper.AI.result : '',
-        conclusion: paper.AI && paper.AI.conclusion ? paper.AI.conclusion : '',
-        code_url: paper.code_url || '',
+        published: normalizeDisplayText(paper.published || paper.publication_date),
+        id: normalizeDisplayText(paper.id),
+        doi: normalizeDisplayText(paper.doi),
+        journal: normalizeDisplayText(paper.journal),
+        source_name: normalizeDisplayText(paper.source_name),
+        source: normalizeDisplayText(paper.source),
+        links: links,
+        pdf: normalizeDisplayText(paper.pdf),
+        motivation: normalizeDisplayText(paper.AI && paper.AI.motivation),
+        method: normalizeDisplayText(paper.AI && paper.AI.method),
+        result: normalizeDisplayText(paper.AI && paper.AI.result),
+        conclusion: normalizeDisplayText(paper.AI && paper.AI.conclusion),
+        code_url: normalizeDisplayText(paper.code_url),
         code_stars: paper.code_stars || 0,
-        code_last_update: paper.code_last_update || ''
+        code_last_update: normalizeDisplayText(paper.code_last_update)
       });
     } catch (error) {
       console.error('解析JSON行失败:', error, line);
@@ -945,6 +961,105 @@ function parseJsonlData(jsonlText, date) {
   });
   
   return result;
+}
+
+function normalizeDisplayText(value) {
+  if (value == null) {
+    return '';
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeDisplayText(item)).filter(Boolean).join(', ');
+  }
+  return typeof value === 'string' ? value : String(value);
+}
+
+function getPaperLinks(paper) {
+  return paper && paper.links && typeof paper.links === 'object' && !Array.isArray(paper.links)
+    ? paper.links
+    : {};
+}
+
+function getSafeHttpUrl(value) {
+  const candidate = normalizeDisplayText(value).trim();
+  if (!candidate) {
+    return '';
+  }
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function normalizeUrlForComparison(value) {
+  const safeUrl = getSafeHttpUrl(value);
+  if (!safeUrl) {
+    return '';
+  }
+  try {
+    const parsed = new URL(safeUrl);
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    return parsed.href.toLowerCase();
+  } catch (error) {
+    return safeUrl.toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+function normalizeDoiValue(value) {
+  return normalizeDisplayText(value)
+    .trim()
+    .replace(/^doi:\s*/i, '')
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+    .trim();
+}
+
+function getPaperDoiUrl(paper) {
+  const links = getPaperLinks(paper);
+  const explicitDoiLink = getSafeHttpUrl(links.doi);
+  if (explicitDoiLink) {
+    return explicitDoiLink;
+  }
+
+  const doi = normalizeDoiValue(links.doi || paper && paper.doi);
+  if (!/^10\.\d{4,9}\/\S+$/i.test(doi)) {
+    return '';
+  }
+  return getSafeHttpUrl(`https://doi.org/${doi}`);
+}
+
+function getPaperOpenAlexUrl(paper) {
+  return getSafeHttpUrl(getPaperLinks(paper).openalex);
+}
+
+function getPaperLandingUrl(paper) {
+  const links = getPaperLinks(paper);
+  return getSafeHttpUrl(links.landing)
+    || getSafeHttpUrl(paper && paper.abs)
+    || getPaperDoiUrl(paper)
+    || getPaperOpenAlexUrl(paper)
+    || '';
+}
+
+function getPaperPdfUrl(paper) {
+  const links = getPaperLinks(paper);
+  const landingUrl = getPaperLandingUrl(paper);
+  const landingKey = normalizeUrlForComparison(landingUrl);
+  const doiKey = normalizeUrlForComparison(getPaperDoiUrl(paper));
+  const openAlexKey = normalizeUrlForComparison(getPaperOpenAlexUrl(paper));
+
+  for (const candidate of [links.pdf, paper && paper.pdf]) {
+    const safeUrl = getSafeHttpUrl(candidate);
+    if (!safeUrl) {
+      continue;
+    }
+    const candidateKey = normalizeUrlForComparison(safeUrl);
+    if (candidateKey && [landingKey, doiKey, openAlexKey].includes(candidateKey)) {
+      continue;
+    }
+    return safeUrl;
+  }
+  return '';
 }
 
 // 获取所有类别并按偏好排序
@@ -981,7 +1096,11 @@ function renderCategoryFilter(categories) {
     const count = categoryCounts[category];
     const button = document.createElement('button');
     button.className = `category-button ${category === currentCategory ? 'active' : ''}`;
-    button.innerHTML = `${category}<span class="category-count">${count}</span>`;
+    button.textContent = category;
+    const countElement = document.createElement('span');
+    countElement.className = 'category-count';
+    countElement.textContent = count;
+    button.appendChild(countElement);
     button.dataset.category = category;
     button.addEventListener('click', () => {
       filterByCategory(category);
@@ -1069,31 +1188,31 @@ function escapeModalText(value) {
 }
 
 function highlightModalText(value, terms, className) {
-  const safeValue = escapeModalText(value);
-  if (!terms || terms.length === 0 || !value) {
-    return safeValue;
-  }
-
-  const safeTerms = terms.map(term => escapeModalText(term));
-  return highlightMatches(safeValue, safeTerms, className);
+  return highlightMatches(value, terms, className);
 }
 
 function highlightMatches(text, terms, className = 'highlight-match') {
-  if (!terms || terms.length === 0 || !text) {
-    return text;
+  const rawText = normalizeDisplayText(text);
+  const normalizedTerms = (terms || [])
+    .map(term => normalizeDisplayText(term).trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  if (normalizedTerms.length === 0 || !rawText) {
+    return escapeHtml(rawText);
   }
-  
-  let result = text;
-  
-  // 按照长度排序关键词，从长到短，避免短词先替换导致长词匹配失败
-  const sortedTerms = [...terms].sort((a, b) => b.length - a.length);
-  
-  // 为每个词创建一个正则表达式，使用 'gi' 标志进行全局、不区分大小写的匹配
-  sortedTerms.forEach(term => {
-    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    result = result.replace(regex, `<span class="${className}">$1</span>`);
+
+  const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(normalizedTerms.map(escapeRegExp).join('|'), 'gi');
+  const safeClassName = escapeHtml(className || 'highlight-match');
+  let result = '';
+  let lastIndex = 0;
+  rawText.replace(regex, (match, offset) => {
+    result += escapeHtml(rawText.slice(lastIndex, offset));
+    result += `<span class="${safeClassName}">${escapeHtml(match)}</span>`;
+    lastIndex = offset + match.length;
+    return match;
   });
-  
+  result += escapeHtml(rawText.slice(lastIndex));
   return result;
 }
 
@@ -1115,9 +1234,7 @@ function formatAuthorsForCard(authorsString, authorTerms = []) {
   if (authorsArray.length <= 4) {
     return authorsArray.map(author => {
       // 对每个作者应用高亮
-      const highlightedAuthor = authorTerms.length > 0 
-        ? highlightMatches(author, authorTerms, 'author-highlight')
-        : author;
+      const highlightedAuthor = highlightMatches(author, authorTerms, 'author-highlight');
       return `<span class="author-item">${highlightedAuthor}</span>`;
     }).join(', ');
   }
@@ -1130,9 +1247,7 @@ function formatAuthorsForCard(authorsString, authorTerms = []) {
   
   // 前2个作者
   firstTwo.forEach(author => {
-    const highlightedAuthor = authorTerms.length > 0 
-      ? highlightMatches(author, authorTerms, 'author-highlight')
-      : author;
+    const highlightedAuthor = highlightMatches(author, authorTerms, 'author-highlight');
     result.push(`<span class="author-item">${highlightedAuthor}</span>`);
   });
   
@@ -1141,9 +1256,7 @@ function formatAuthorsForCard(authorsString, authorTerms = []) {
   
   // 后2个作者
   lastTwo.forEach(author => {
-    const highlightedAuthor = authorTerms.length > 0 
-      ? highlightMatches(author, authorTerms, 'author-highlight')
-      : author;
+    const highlightedAuthor = highlightMatches(author, authorTerms, 'author-highlight');
     result.push(`<span class="author-item">${highlightedAuthor}</span>`);
   });
   
@@ -1409,9 +1522,14 @@ function renderPapers() {
       paperCard.title = `匹配: ${paper.matchReason.join(' | ')}`;
     }
     
-    const categoryTags = paper.allCategories ? 
-      paper.allCategories.map(cat => `<span class="category-tag">${cat}</span>`).join('') : 
-      `<span class="category-tag">${paper.category}</span>`;
+    const categories = Array.isArray(paper.allCategories)
+      ? paper.allCategories
+      : (Array.isArray(paper.category) ? paper.category : [paper.category]);
+    const categoryTags = categories
+      .map(category => normalizeDisplayText(category).trim())
+      .filter(Boolean)
+      .map(category => `<span class="category-tag">${escapeHtml(category)}</span>`)
+      .join('');
     
     // 组合需要高亮的词：关键词 + 文本搜索
     const titleSummaryTerms = [];
@@ -1423,12 +1541,8 @@ function renderPapers() {
     }
 
     // 高亮标题和摘要（关键词与文本搜索）
-    const highlightedTitle = titleSummaryTerms.length > 0 
-      ? highlightMatches(paper.title, titleSummaryTerms, 'keyword-highlight') 
-      : paper.title;
-    const highlightedSummary = titleSummaryTerms.length > 0 
-      ? highlightMatches(paper.summary, titleSummaryTerms, 'keyword-highlight') 
-      : paper.summary;
+    const highlightedTitle = highlightMatches(paper.title, titleSummaryTerms, 'keyword-highlight');
+    const highlightedSummary = highlightMatches(paper.summary, titleSummaryTerms, 'keyword-highlight');
 
     // 高亮作者（作者过滤 + 文本搜索）
     const authorTerms = [];
@@ -1460,16 +1574,15 @@ function renderPapers() {
       ${paper.isMatched ? '<div class="match-badge" title="匹配您的搜索条件"></div>' : ''}
       <div class="paper-card-header">
         <h3 class="paper-card-title">${highlightedTitle}</h3>
-        <p class="paper-card-authors">${formattedAuthors}</p>
-        <div class="paper-card-categories">
-          ${categoryTags}
-        </div>
+        ${formattedAuthors ? `<p class="paper-card-authors">${formattedAuthors}</p>` : ''}
+        ${categoryTags ? `<div class="paper-card-categories">${categoryTags}</div>` : ''}
+        ${(paper.journal || paper.source_name) ? `<p class="paper-card-journal">${escapeHtml(paper.journal || paper.source_name)}</p>` : ''}
       </div>
       <div class="paper-card-body">
         <p class="paper-card-summary">${highlightedSummary}</p>
         <div class="paper-card-footer">
           <div class="footer-left">
-            <span class="paper-card-date">${formatDate(paper.date)}</span>
+            <span class="paper-card-date">${escapeHtml(formatDisplayDate(paper.published || paper.date))}</span>
           </div>
           <span class="paper-card-link">Details</span>
         </div>
@@ -1511,7 +1624,14 @@ function showPaperDetails(paper, paperIndex) {
   clearMath(modalTitle);
   modalTitle.innerHTML = paperIndex ? `<span class="paper-index-badge">${paperIndex}</span> ${highlightedTitle}` : highlightedTitle;
   
-  const abstractText = typeof paper.details === 'string' ? paper.details : '';
+  const abstractText = normalizeDisplayText(paper.details);
+  const landingUrl = getPaperLandingUrl(paper);
+  const pdfUrl = getPaperPdfUrl(paper);
+  const doiUrl = getPaperDoiUrl(paper);
+  const openAlexUrl = getPaperOpenAlexUrl(paper);
+  const journal = normalizeDisplayText(paper.journal || paper.source_name).trim();
+  const published = normalizeDisplayText(paper.published).trim();
+  const source = normalizeDisplayText(paper.source).trim();
   
   const categoryDisplay = escapeModalText(paper.allCategories ?
     paper.allCategories.join(', ') :
@@ -1574,10 +1694,10 @@ function showPaperDetails(paper, paperIndex) {
     ? escapeModalText(paper.abstractTranslation)
     : '';
 
-  let abstractSection = '<div class="abstract-section"><h3>Abstract</h3>';
+  let abstractSection = '<div class="abstract-section"><h3>摘要</h3>';
   if (hasAbstractTranslation) {
     abstractSection +=
-      '<details open><summary>中文直译</summary>' +
+      '<details open><summary>中文摘要</summary>' +
       '<p class="translated-abstract">' +
       safeAbstractTranslation +
       '</p></details>';
@@ -1585,7 +1705,7 @@ function showPaperDetails(paper, paperIndex) {
   if (hasOriginalAbstract) {
     abstractSection += hasAbstractTranslation ? '<details>' : '<details open>';
     abstractSection +=
-      '<summary>English original</summary>' +
+      '<summary>英文摘要</summary>' +
       '<p class="original-abstract">' +
       highlightedAbstract +
       '</p></details>';
@@ -1602,26 +1722,28 @@ function showPaperDetails(paper, paperIndex) {
   
   const modalContent = `
     <div class="paper-details ${matchedPaperClass}">
-      <p><strong>Authors: </strong>${highlightedAuthors}</p>
-      <p><strong>Categories: </strong>${categoryDisplay}</p>
-      <p><strong>Date: </strong>${formatDate(paper.date)}</p>
+      ${paper.authors ? `<p><strong>作者： </strong>${highlightedAuthors}</p>` : ''}
+      ${categoryDisplay ? `<p><strong>分类： </strong>${categoryDisplay}</p>` : ''}
+      ${journal ? `<p><strong>期刊 / 来源： </strong>${escapeModalText(journal)}</p>` : ''}
+      ${published ? `<p><strong>发表日期： </strong>${escapeModalText(published)}</p>` : ''}
+      ${paper.doi || doiUrl ? `<p><strong>DOI： </strong>${escapeModalText(paper.doi || doiUrl)}</p>` : ''}
+      ${source ? `<p><strong>来源： </strong>${escapeModalText(source)}</p>` : ''}
       
-      
-      <h3>TL;DR</h3>
+      <h3>核心结论</h3>
       <p>${highlightedSummary}</p>
       
       <div class="paper-sections">
-        ${paper.motivation ? `<div class="paper-section"><h4>Motivation</h4><p>${highlightedMotivation}</p></div>` : ''}
-        ${paper.method ? `<div class="paper-section"><h4>Method</h4><p>${highlightedMethod}</p></div>` : ''}
-        ${paper.result ? `<div class="paper-section"><h4>Result</h4><p>${highlightedResult}</p></div>` : ''}
-        ${paper.conclusion ? `<div class="paper-section"><h4>Conclusion</h4><p>${highlightedConclusion}</p></div>` : ''}
+        ${paper.motivation ? `<div class="paper-section"><h4>研究问题与理论背景</h4><p>${highlightedMotivation}</p></div>` : ''}
+        ${paper.method ? `<div class="paper-section"><h4>数据、样本与研究方法</h4><p>${highlightedMethod}</p></div>` : ''}
+        ${paper.result ? `<div class="paper-section"><h4>主要结果、机制与异质性</h4><p>${highlightedResult}</p></div>` : ''}
+        ${paper.conclusion ? `<div class="paper-section"><h4>研究贡献与启示</h4><p>${highlightedConclusion}</p></div>` : ''}
       </div>
       
       ${abstractSection}
       
-      <div class="pdf-preview-section">
+      ${pdfUrl ? `<div class="pdf-preview-section">
         <div class="pdf-header">
-          <h3>PDF Preview</h3>
+          <h3>PDF 预览</h3>
           <button class="pdf-expand-btn" onclick="togglePdfSize(this)">
             <svg class="expand-icon" viewBox="0 0 24 24" width="24" height="24">
               <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
@@ -1632,9 +1754,9 @@ function showPaperDetails(paper, paperIndex) {
           </button>
         </div>
         <div class="pdf-container">
-          <iframe src="${paper.url.replace('abs', 'pdf')}" width="100%" height="800px" frameborder="0"></iframe>
+          <iframe src="${escapeHtml(pdfUrl)}" width="100%" height="800px" frameborder="0" title="PDF preview"></iframe>
         </div>
-      </div>
+      </div>` : ''}
     </div>
   `;
   
@@ -1643,15 +1765,26 @@ function showPaperDetails(paper, paperIndex) {
   modalBody.innerHTML = modalContent;
   void typesetMath(modalTitle);
   void typesetMath(modalBody);
-  document.getElementById('paperLink').href = paper.url;
-  document.getElementById('pdfLink').href = paper.url.replace('abs', 'pdf');
-  document.getElementById('htmlLink').href = paper.url.replace('abs', 'html');
+  const setLinkState = (element, url, title) => {
+    if (!element) return;
+    element.href = url || '#';
+    element.title = title;
+    element.style.display = url ? 'flex' : 'none';
+  };
+  setLinkState(paperLink, landingUrl, '查看论文页面');
+  setLinkState(pdfLink, pdfUrl, '查看 PDF');
+  setLinkState(htmlLink, '', '查看论文页面');
+  const doiLink = document.getElementById('doiLink');
+  setLinkState(doiLink, doiUrl, '打开 DOI');
+  const openAlexLink = document.getElementById('openAlexLink');
+  setLinkState(openAlexLink, openAlexUrl, '在 OpenAlex 中查看');
   
   // --- GitHub Button Logic ---
   const githubLink = document.getElementById('githubLink');
   
-  if (paper.code_url) {
-    githubLink.href = paper.code_url;
+  const codeUrl = getSafeHttpUrl(paper.code_url);
+  if (codeUrl) {
+    githubLink.href = codeUrl;
     githubLink.style.display = 'flex'; 
     githubLink.title = "View Code on GitHub";
   } else {
@@ -1659,9 +1792,22 @@ function showPaperDetails(paper, paperIndex) {
   }
   // ---------------------------
 
-  // 提示词来自：https://papers.cool/
-  prompt = `请你阅读这篇文章${paper.url.replace('abs', 'pdf')},总结一下这篇文章解决的问题、相关工作、研究方法、做了什么实验及其结果、结论，最后整体总结一下这篇文章的内容`
-  document.getElementById('kimiChatLink').href = `https://www.kimi.com/_prefill_chat?prefill_prompt=${prompt}&system_prompt=你是一个学术助手，后面的对话将围绕着以下论文内容进行，已经通过链接给出了论文的PDF和论文已有的FAQ。用户将继续向你咨询论文的相关问题，请你作出专业的回答，不要出现第一人称，当涉及到分点回答时，鼓励你以markdown格式输出。&send_immediately=true&force_search=true`;
+  // 仅在存在明确 PDF 链接时提供外部 AI 阅读入口。
+  const kimiChatLink = document.getElementById('kimiChatLink');
+  if (kimiChatLink && pdfUrl) {
+    const prompt = `请你阅读这篇文章${pdfUrl},总结一下这篇文章解决的问题、相关工作、研究方法、做了什么实验及其结果、结论，最后整体总结一下这篇文章的内容`;
+    const params = new URLSearchParams({
+      prefill_prompt: prompt,
+      system_prompt: '你是一个学术助手，后面的对话将围绕着以下论文内容进行，已经通过链接给出了论文的PDF和论文已有的FAQ。用户将继续向你咨询论文的相关问题，请你作出专业的回答，不要出现第一人称，当涉及到分点回答时，鼓励你以markdown格式输出。',
+      send_immediately: 'true',
+      force_search: 'true'
+    });
+    kimiChatLink.href = `https://www.kimi.com/_prefill_chat?${params.toString()}`;
+    kimiChatLink.style.display = 'flex';
+  } else if (kimiChatLink) {
+    kimiChatLink.href = '#';
+    kimiChatLink.style.display = 'none';
+  }
   
   // 更新论文位置信息
   const paperPosition = document.getElementById('paperPosition');
@@ -1773,11 +1919,19 @@ function toggleView() {
 
 function formatDate(dateString) {
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'numeric',
     day: 'numeric'
   });
+}
+
+function formatDisplayDate(dateString) {
+  const value = normalizeDisplayText(dateString).trim();
+  return value ? formatDate(value) : '';
 }
 
 async function loadPapersByDateRange(startDate, endDate) {
