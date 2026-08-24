@@ -945,6 +945,13 @@ function parseJsonlData(jsonlText, date) {
         journal: normalizeDisplayText(paper.journal),
         source_name: normalizeDisplayText(paper.source_name),
         source: normalizeDisplayText(paper.source),
+        journal_tier: normalizeDisplayText(paper.journal_tier),
+        journal_priority: Number.isFinite(Number(paper.journal_priority))
+          ? Number(paper.journal_priority)
+          : 0,
+        journal_rank_sources: Array.isArray(paper.journal_rank_sources)
+          ? paper.journal_rank_sources.map(source => normalizeDisplayText(source).trim()).filter(Boolean)
+          : [],
         links: links,
         pdf: normalizeDisplayText(paper.pdf),
         motivation: normalizeDisplayText(paper.AI && paper.AI.motivation),
@@ -971,6 +978,21 @@ function normalizeDisplayText(value) {
     return value.map(item => normalizeDisplayText(item)).filter(Boolean).join(', ');
   }
   return typeof value === 'string' ? value : String(value);
+}
+
+function getJournalBadges(paper) {
+  const allowedBadges = new Set(['UTD24', 'FT50', 'AJG4', 'AJG3', 'Preprint']);
+  const sources = Array.isArray(paper && paper.journal_rank_sources)
+    ? paper.journal_rank_sources
+    : [];
+  return [...new Set(sources.map(source => normalizeDisplayText(source).trim()))]
+    .filter(source => allowedBadges.has(source));
+}
+
+function renderJournalBadges(paper) {
+  return getJournalBadges(paper)
+    .map(badge => `<span class="journal-badge">${escapeHtml(badge)}</span>`)
+    .join('');
 }
 
 function getPaperLinks(paper) {
@@ -1551,6 +1573,7 @@ function renderPapers() {
     
     // 格式化作者列表（应用截断规则和高亮）
     const formattedAuthors = formatAuthorsForCard(paper.authors, authorTerms);
+    const journalBadges = renderJournalBadges(paper);
     
     // 构建 GitHub 按钮 HTML
     // let githubHtml = '';
@@ -1576,7 +1599,7 @@ function renderPapers() {
         <h3 class="paper-card-title">${highlightedTitle}</h3>
         ${formattedAuthors ? `<p class="paper-card-authors">${formattedAuthors}</p>` : ''}
         ${categoryTags ? `<div class="paper-card-categories">${categoryTags}</div>` : ''}
-        ${(paper.journal || paper.source_name) ? `<p class="paper-card-journal">${escapeHtml(paper.journal || paper.source_name)}</p>` : ''}
+        ${(paper.journal || paper.source_name || journalBadges) ? `<p class="paper-card-journal">${paper.journal || paper.source_name ? escapeHtml(paper.journal || paper.source_name) : ''}${journalBadges}</p>` : ''}
       </div>
       <div class="paper-card-body">
         <p class="paper-card-summary">${highlightedSummary}</p>
@@ -1632,6 +1655,7 @@ function showPaperDetails(paper, paperIndex) {
   const journal = normalizeDisplayText(paper.journal || paper.source_name).trim();
   const published = normalizeDisplayText(paper.published).trim();
   const source = normalizeDisplayText(paper.source).trim();
+  const journalBadges = renderJournalBadges(paper);
   
   const categoryDisplay = escapeModalText(paper.allCategories ?
     paper.allCategories.join(', ') :
@@ -1724,7 +1748,7 @@ function showPaperDetails(paper, paperIndex) {
     <div class="paper-details ${matchedPaperClass}">
       ${paper.authors ? `<p><strong>作者： </strong>${highlightedAuthors}</p>` : ''}
       ${categoryDisplay ? `<p><strong>分类： </strong>${categoryDisplay}</p>` : ''}
-      ${journal ? `<p><strong>期刊 / 来源： </strong>${escapeModalText(journal)}</p>` : ''}
+      ${(journal || journalBadges) ? `<p><strong>期刊 / 来源： </strong>${journal ? escapeModalText(journal) : ''}${journalBadges}</p>` : ''}
       ${published ? `<p><strong>发表日期： </strong>${escapeModalText(published)}</p>` : ''}
       ${paper.doi || doiUrl ? `<p><strong>DOI： </strong>${escapeModalText(paper.doi || doiUrl)}</p>` : ''}
       ${source ? `<p><strong>来源： </strong>${escapeModalText(source)}</p>` : ''}

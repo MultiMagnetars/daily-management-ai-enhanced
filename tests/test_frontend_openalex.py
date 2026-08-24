@@ -138,6 +138,12 @@ context.showPaperDetails(noPdf, 1);
 assert(!element('modalBody').innerHTML.includes('<iframe'), 'missing PDF still created preview');
 assert(element('pdfLink').style.display === 'none', 'missing PDF button was not hidden');
 assert(context.highlightMatches('<img src=x onerror=alert(1)>', [], 'keyword-highlight').includes('&lt;img'), 'XSS escaping failed');
+assert(context.renderJournalBadges({}) === '', 'old data without ranking metadata failed');
+const badges = context.renderJournalBadges({ journal_rank_sources: ['UTD24', 'FT50', 'AJG4', 'AJG3', 'Preprint', 'priority-S', '<img>'] });
+for (const badge of ['UTD24', 'FT50', 'AJG4', 'AJG3', 'Preprint']) {
+  assert(badges.includes(`>${badge}<`), `verified badge missing: ${badge}`);
+}
+assert(!badges.includes('priority-S') && !badges.includes('<img>'), 'internal or unsafe badge leaked');
 """
         completed = subprocess.run(
             ["node", "-e", node_script],
@@ -163,6 +169,10 @@ assert(context.highlightMatches('<img src=x onerror=alert(1)>', [], 'keyword-hig
             self.assertIn(label, app)
         self.assertIn("window.MathJax =", index)
         self.assertIn("tex-mml-chtml.js", index)
+        self.assertIn("journal_rank_sources", app)
+        self.assertNotIn("S_TIER_JOURNALS", app)
+        self.assertNotIn("A_TIER_JOURNALS", app)
+        self.assertNotIn("B_TIER_JOURNALS", app)
 
 
 if __name__ == "__main__":

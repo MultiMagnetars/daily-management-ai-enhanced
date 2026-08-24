@@ -6,11 +6,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from unittest.mock import patch
 
+from daily_arxiv.daily_arxiv.journal_rankings import (
+    select_journal_quality_and_exploration,
+)
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 AI_DIR = ROOT_DIR / "ai"
 
-# Load only the two pure filtering helpers so these tests do not require
+# Load only the pure filtering/selection helpers so these tests do not require
 # optional LLM/runtime dependencies.
 source_path = AI_DIR / "enhance.py"
 source_tree = ast.parse(source_path.read_text(encoding="utf-8"))
@@ -32,6 +36,7 @@ helper_namespace = {
     "Optional": Optional,
     "sys": sys,
     "Tuple": Tuple,
+    "select_journal_quality_and_exploration": select_journal_quality_and_exploration,
 }
 exec(
     compile(
@@ -191,14 +196,15 @@ class KeywordFilterTests(unittest.TestCase):
     def test_ai_cap_keeps_all_records_when_limit_is_large(self):
         papers = [paper("1"), paper("2")]
         selected, deferred = apply_ai_paper_cap(papers, 20)
-        self.assertEqual(papers, selected)
+        self.assertEqual(["1", "2"], [item["id"] for item in selected])
+        self.assertEqual(["U", "U"], [item["journal_tier"] for item in selected])
         self.assertEqual([], deferred)
 
     def test_ai_cap_is_after_filter_and_before_ai_processing(self):
         source = (ROOT_DIR / "ai" / "enhance.py").read_text(encoding="utf-8")
         main_source = source[source.index("def main():") :]
         filter_position = main_source.index("filter_papers_by_keywords(data, keywords)")
-        cap_position = main_source.index("apply_ai_paper_cap(filtered_data, max_ai_papers)")
+        cap_position = main_source.index("apply_ai_paper_cap(annotated_filtered_data, max_ai_papers)")
         ai_position = main_source.index("process_all_items(")
 
         self.assertLess(filter_position, cap_position)

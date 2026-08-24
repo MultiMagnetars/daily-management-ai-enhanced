@@ -22,6 +22,16 @@ from langchain.prompts import (
 )
 from structure import Structure
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+from daily_arxiv.daily_arxiv.journal_rankings import (  # noqa: E402
+    annotate_paper_journal_rank,
+    journal_tier_distribution,
+    select_journal_quality_and_exploration,
+    selection_slots,
+)
+
 MAX_AI_PAPERS_PER_RUN = 20
 
 if os.path.exists('.env'):
@@ -109,10 +119,8 @@ def apply_ai_paper_cap(
     papers: List[Dict],
     limit: int,
 ) -> Tuple[List[Dict], List[Dict]]:
-    """Keep input order and split filtered papers into selected/deferred lists."""
-    if limit >= len(papers):
-        return list(papers), []
-    return list(papers[:limit]), list(papers[limit:])
+    """Apply journal quality-first plus original-order exploration selection."""
+    return select_journal_quality_and_exploration(papers, limit)
 
 def process_single_item(chain, item: Dict, language: str) -> Dict:
     def check_github_code(content: str) -> Dict:
@@ -328,13 +336,34 @@ def main():
         )
 
     max_ai_papers = parse_max_ai_papers(os.environ.get("MAX_AI_PAPERS_PER_RUN"))
-    selected_data, deferred_data = apply_ai_paper_cap(filtered_data, max_ai_papers)
+    annotated_filtered_data = [annotate_paper_journal_rank(item) for item in filtered_data]
+    selected_data, deferred_data = apply_ai_paper_cap(annotated_filtered_data, max_ai_papers)
+    tier_counts = journal_tier_distribution(annotated_filtered_data)
+    quality_slots, exploration_slots = selection_slots(max_ai_papers)
+    quality_selected = [
+        item for item in selected_data if item.get("selection_reason") == "journal_quality"
+    ]
+    exploration_selected = [
+        item for item in selected_data if item.get("selection_reason") == "exploration"
+    ]
     print(
         f"FILTER_KEYWORDS matched: {len(filtered_data)} / "
         f"keyword_matched_count={len(filtered_data)}",
         file=sys.stderr,
     )
+    print("Journal tier distribution:", file=sys.stderr)
+    for tier in ("S", "A", "B", "C", "U"):
+        print(f"{tier}: {tier_counts[tier]}", file=sys.stderr)
     print(f"AI paper cap: {max_ai_papers} / ai_cap={max_ai_papers}", file=sys.stderr)
+    print(f"Quality slots: {quality_slots}", file=sys.stderr)
+    print(f"Exploration slots: {exploration_slots}", file=sys.stderr)
+    print("Quality selected:", file=sys.stderr)
+    for tier in ("S", "A", "B", "C", "U"):
+        print(
+            f"{tier}: {sum(1 for item in quality_selected if item.get('journal_tier') == tier)}",
+            file=sys.stderr,
+        )
+    print(f"Exploration selected: {len(exploration_selected)}", file=sys.stderr)
     print(
         f"AI papers selected: {len(selected_data)} / "
         f"ai_selected_count={len(selected_data)}",
@@ -345,6 +374,15 @@ def main():
         f"ai_deferred_count={len(deferred_data)}",
         file=sys.stderr,
     )
+    for rank, item in enumerate(selected_data, start=1):
+        print(
+            "Selected paper: "
+            f"rank={rank} tier={item.get('journal_tier', 'U')} "
+            f"journal={item.get('journal') or item.get('source_name') or '<none>'} "
+            f"title={item.get('title') or '<untitled>'} "
+            f"selection_reason={item.get('selection_reason', '')}",
+            file=sys.stderr,
+        )
 
     if not selected_data:
         with open(target_file, "w", encoding="utf-8"):

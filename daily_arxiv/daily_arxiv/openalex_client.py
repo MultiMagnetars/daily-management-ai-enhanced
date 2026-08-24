@@ -183,6 +183,21 @@ def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _source_id(value: Any) -> str:
+    """Keep a canonical OpenAlex Source ID when the Work includes one."""
+
+    text = _text(value).rstrip("/")
+    if "/" in text:
+        text = text.rsplit("/", 1)[-1]
+    return text if re.fullmatch(r"(?i)S\d+", text) else ""
+
+
+def _issn_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
 def _authors_from_work(work: Mapping[str, Any]) -> list[str]:
     authorships = work.get("authorships")
     if not isinstance(authorships, list):
@@ -232,6 +247,9 @@ def openalex_work_to_paper(
     primary_source = primary_location.get("source")
     if not isinstance(primary_source, Mapping):
         primary_source = {}
+    source_id = _source_id(primary_source.get("id"))
+    issn_l = _text(primary_source.get("issn_l"))
+    issn = _issn_list(primary_source.get("issn"))
 
     landing_url = _clean_url(primary_location.get("landing_page_url"))
     doi = normalize_doi(work.get("doi")) or ""
@@ -270,6 +288,9 @@ def openalex_work_to_paper(
         "journal": _text(primary_source.get("display_name")),
         "published": _text(work.get("publication_date")),
         "openalex_id": openalex_id,
+        "source_id": source_id,
+        "issn_l": issn_l,
+        "issn": issn,
         "work_type": _text(work.get("type")),
         "language": _text(work.get("language")),
         "primary_topic": primary_topic_name,
