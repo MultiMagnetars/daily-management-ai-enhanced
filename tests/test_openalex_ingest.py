@@ -553,11 +553,12 @@ class OpenAlexIngestTests(unittest.TestCase):
         self.assertIn("FILTER_KEYWORDS", build_block)
         self.assertIn("same_day_merge merge", build_block)
 
-    def test_workflow_keeps_manual_dispatch_and_no_schedule(self):
+    def test_workflow_keeps_manual_dispatch_and_daily_schedule(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("validation_mode:", workflow)
-        self.assertNotIn("schedule:", workflow)
+        self.assertEqual(workflow.count("  schedule:"), 1)
+        self.assertIn("cron: '0 16 * * *'", workflow)
         self.assertNotIn('cron: "30 17 * * *"', workflow)
 
     def test_workflow_keeps_same_day_and_filter_wiring_unchanged(self):
