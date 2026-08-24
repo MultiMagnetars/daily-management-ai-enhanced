@@ -8,6 +8,8 @@ concurrency:
   cancel-in-progress: false
 
 on:
+  schedule:
+    - cron: '0 16 * * *'
   workflow_dispatch:
     inputs:
       validation_mode:
@@ -102,8 +104,8 @@ jobs:
       run: |
         set -euo pipefail
         source .venv/bin/activate
-        today=$(date -u "+%Y-%m-%d")
-        start_date=$(date -u -d "${today} - 3 days" "+%Y-%m-%d")
+        today=$(TZ=Asia/Shanghai date "+%Y-%m-%d")
+        start_date=$(TZ=Asia/Shanghai date -d "${today} - 3 days" "+%Y-%m-%d")
         output="data/${today}.jsonl"
         status_file="data/${today}_openalex_status.json"
 

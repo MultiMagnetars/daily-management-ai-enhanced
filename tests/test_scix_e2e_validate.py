@@ -361,7 +361,8 @@ class ScixE2EValidationTests(unittest.TestCase):
         self.assertIn("- scix-e2e", workflow)
         self.assertIn("inputs.validation_mode == 'scix-e2e'", workflow)
         self.assertIn("inputs.validation_mode == 'scix-smoke'", workflow)
-        self.assertNotIn("schedule:", workflow)
+        self.assertEqual(workflow.count("  schedule:"), 1)
+        self.assertIn("cron: '0 16 * * *'", workflow)
         self.assertNotIn('cron: "30 17 * * *"', workflow)
         self.assertIn("python -m daily_arxiv.daily_arxiv.scix_e2e_validate", workflow)
 
