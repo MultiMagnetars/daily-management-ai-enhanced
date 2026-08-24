@@ -81,7 +81,12 @@ def save_papers_data(papers, file_path):
         print(f"Error saving {file_path}: {e}", file=sys.stderr)
         return False
 
-def perform_deduplication(run_date=None, data_dir=None, history_dir=None):
+def perform_deduplication(
+    run_date=None,
+    data_dir=None,
+    history_dir=None,
+    history_language=None,
+):
     """
     执行多日去重：删除与历史多日重复的论文条目，保留新内容
     Perform deduplication over multiple past days
@@ -129,9 +134,14 @@ def perform_deduplication(run_date=None, data_dir=None, history_dir=None):
         # 收集历史多日 canonical keys。除了 id，还包含 arXiv、DOI、bibcode
         # 和 title+first-author+year，确保跨源 canonical id 改变时仍能去重。
         history_ids = set()
+        history_suffix = (
+            f"_AI_enhanced_{history_language}"
+            if history_language
+            else ""
+        )
         for i in range(1, history_days + 1):
             date_str = (today_date - timedelta(days=i)).isoformat()
-            history_file = history_root / f"{date_str}.jsonl"
+            history_file = history_root / f"{date_str}{history_suffix}.jsonl"
             _, past_ids = load_papers_data(history_file)
             history_ids.update(past_ids)
 
@@ -202,6 +212,13 @@ def main():
         "--history-dir",
         help="Extracted data-branch data directory; never use the main worktree for this snapshot",
     )
+    parser.add_argument(
+        "--history-language",
+        help=(
+            "Use only published AI-enhanced history files for this language; "
+            "deferred raw candidates are not treated as history"
+        ),
+    )
     args = parser.parse_args()
 
     print("正在执行去重检查... / Performing intelligent deduplication check...", file=sys.stderr)
@@ -212,6 +229,7 @@ def main():
             run_date=args.run_date,
             data_dir=args.data_dir,
             history_dir=args.history_dir,
+            history_language=args.history_language,
         )
     except ValueError as exc:
         print(f"去重日期参数错误: {exc} / Invalid deduplication date", file=sys.stderr)

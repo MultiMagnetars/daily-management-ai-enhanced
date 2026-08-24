@@ -33,29 +33,44 @@ except ImportError:  # pragma: no cover - direct script execution fallback
 OPENALEX_API_BASE_URL = "https://api.openalex.org"
 OPENALEX_API_URL = f"{OPENALEX_API_BASE_URL}/works"
 DEFAULT_PER_PAGE = 100
-DEFAULT_MAX_PAGES = 10
+DEFAULT_MAX_PAGES = 2
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_RETRIES = 3
+DEFAULT_OPENALEX_WORK_TYPES: tuple[str, ...] = (
+    "article",
+    "preprint",
+    "review",
+    "report",
+)
 
 DEFAULT_OPENALEX_SEARCH_TERMS: tuple[str, ...] = (
     "accounting",
     "auditing",
     "financial reporting",
+    "earnings management",
     "corporate finance",
     "corporate governance",
     "capital market",
     "ESG",
-    "sustainability",
+    "corporate social responsibility",
     "sustainable finance",
+    "green finance",
+    "climate finance",
     "corporate disclosure",
+    "environmental disclosure",
     "institutional investor",
     "digital transformation",
     "digital economy",
-    "artificial intelligence",
     "fintech",
+    "data asset",
     "supply chain",
+    "supply chain resilience",
     "green innovation",
-    "climate finance",
+    "environmental governance",
+    "information spillover",
+    "disclosure spillover",
+    "peer disclosure",
+    "information externality",
 )
 
 # Short aliases make the configuration and tests easy to discover while the
@@ -414,7 +429,8 @@ class OpenAlexClient:
             "search": build_openalex_search_query(self.search_terms),
             "filter": (
                 f"from_publication_date:{start_date},"
-                f"to_publication_date:{end_date},has_abstract:true"
+                f"to_publication_date:{end_date},has_abstract:true,"
+                f"type:{'|'.join(DEFAULT_OPENALEX_WORK_TYPES)}"
             ),
             "per-page": self.per_page,
             "cursor": cursor,
@@ -466,10 +482,18 @@ class OpenAlexClient:
             if result.pages >= self.max_pages:
                 result.status = "truncated"
                 result.truncated = True
-                print(
-                    f"OpenAlex pagination reached max_pages={self.max_pages}; status=truncated",
-                    file=sys.stderr,
-                )
+                if self.max_pages == DEFAULT_MAX_PAGES:
+                    print(
+                        f"OpenAlex production page cap reached: {self.max_pages}; "
+                        "status=truncated",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(
+                        f"OpenAlex pagination reached max_pages={self.max_pages}; "
+                        "status=truncated",
+                        file=sys.stderr,
+                    )
                 break
             cursor = next_cursor
 

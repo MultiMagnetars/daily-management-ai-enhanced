@@ -22,6 +22,8 @@ from langchain.prompts import (
 )
 from structure import Structure
 
+MAX_AI_PAPERS_PER_RUN = 20
+
 if os.path.exists('.env'):
     dotenv.load_dotenv()
 template = open("template.txt", "r").read()
@@ -78,6 +80,39 @@ def filter_papers_by_keywords(
             filtered_papers.append(paper)
 
     return filtered_papers, keyword_hit_counts
+
+def parse_max_ai_papers(raw_limit: Optional[str]) -> int:
+    """Parse the optional per-run AI cap, falling back safely to 20."""
+    if raw_limit is None or not raw_limit.strip():
+        return MAX_AI_PAPERS_PER_RUN
+
+    try:
+        limit = int(raw_limit.strip())
+    except (TypeError, ValueError):
+        print(
+            f"WARN: invalid MAX_AI_PAPERS_PER_RUN={raw_limit!r}; "
+            f"using {MAX_AI_PAPERS_PER_RUN}",
+            file=sys.stderr,
+        )
+        return MAX_AI_PAPERS_PER_RUN
+
+    if limit <= 0:
+        print(
+            f"WARN: MAX_AI_PAPERS_PER_RUN must be positive; "
+            f"using {MAX_AI_PAPERS_PER_RUN}",
+            file=sys.stderr,
+        )
+        return MAX_AI_PAPERS_PER_RUN
+    return limit
+
+def apply_ai_paper_cap(
+    papers: List[Dict],
+    limit: int,
+) -> Tuple[List[Dict], List[Dict]]:
+    """Keep input order and split filtered papers into selected/deferred lists."""
+    if limit >= len(papers):
+        return list(papers), []
+    return list(papers[:limit]), list(papers[limit:])
 
 def process_single_item(chain, item: Dict, language: str) -> Dict:
     def check_github_code(content: str) -> Dict:
@@ -292,19 +327,38 @@ def main():
             file=sys.stderr,
         )
 
-    if not filtered_data:
+    max_ai_papers = parse_max_ai_papers(os.environ.get("MAX_AI_PAPERS_PER_RUN"))
+    selected_data, deferred_data = apply_ai_paper_cap(filtered_data, max_ai_papers)
+    print(
+        f"FILTER_KEYWORDS matched: {len(filtered_data)} / "
+        f"keyword_matched_count={len(filtered_data)}",
+        file=sys.stderr,
+    )
+    print(f"AI paper cap: {max_ai_papers} / ai_cap={max_ai_papers}", file=sys.stderr)
+    print(
+        f"AI papers selected: {len(selected_data)} / "
+        f"ai_selected_count={len(selected_data)}",
+        file=sys.stderr,
+    )
+    print(
+        f"AI papers deferred by cap: {len(deferred_data)} / "
+        f"ai_deferred_count={len(deferred_data)}",
+        file=sys.stderr,
+    )
+
+    if not selected_data:
         with open(target_file, "w", encoding="utf-8"):
             pass
         print(
             f"没有论文命中关键词，已生成空结果文件: {target_file} / "
-            f"No papers matched; created empty result file: {target_file}",
+            f"No AI papers selected; created empty result file: {target_file}",
             file=sys.stderr,
         )
         return
 
     # 并行处理所有数据
     processed_data = process_all_items(
-        filtered_data,
+        selected_data,
         model_name,
         language,
         args.max_workers

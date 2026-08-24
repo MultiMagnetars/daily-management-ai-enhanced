@@ -153,6 +153,7 @@ jobs:
       run: |
         source .venv/bin/activate
         today=${{ steps.crawl_step.outputs.crawl_date }}
+        language="${{ vars.LANGUAGE }}"
         echo "执行去重检查... / Performing intelligent deduplication check..."
         
         cd daily_arxiv
@@ -161,12 +162,14 @@ jobs:
         if [ "${{ steps.history_step.outputs.history_available }}" = "true" ]; then
             python daily_arxiv/check_stats.py \
               --date "$today" \
-              --history-dir "${{ steps.history_step.outputs.history_dir }}"
+              --history-dir "${{ steps.history_step.outputs.history_dir }}" \
+              --history-language "$language"
         else
             echo "⚠️ WARN: data branch history unavailable; using no external history for this run"
             python daily_arxiv/check_stats.py \
               --date "$today" \
-              --history-dir "${RUNNER_TEMP}/daily_arxiv_history/unavailable"
+              --history-dir "${RUNNER_TEMP}/daily_arxiv_history/unavailable" \
+              --history-language "$language"
         fi
         
         # 获取退出码 / Get exit code
@@ -229,6 +232,8 @@ jobs:
         
     - name: AI Enhancement Processing
       if: steps.same_day_step.outputs.has_new_candidates == 'true'
+      env:
+        MAX_AI_PAPERS_PER_RUN: ${{ vars.MAX_AI_PAPERS_PER_RUN }}
       run: |
         source .venv/bin/activate
         today=${{ steps.crawl_step.outputs.crawl_date }}

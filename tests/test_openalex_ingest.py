@@ -10,6 +10,7 @@ from unittest.mock import patch
 from daily_arxiv.daily_arxiv.openalex_client import (
     DEFAULT_MAX_PAGES,
     DEFAULT_OPENALEX_SEARCH_TERMS,
+    DEFAULT_OPENALEX_WORK_TYPES,
     DEFAULT_PER_PAGE,
     OPENALEX_API_URL,
     OpenAlexClient,
@@ -112,10 +113,58 @@ def page(works, next_cursor=None):
 
 class OpenAlexIngestTests(unittest.TestCase):
     def test_default_search_terms_are_management_terms(self):
+        expected = (
+            "accounting",
+            "auditing",
+            "financial reporting",
+            "earnings management",
+            "corporate finance",
+            "corporate governance",
+            "capital market",
+            "ESG",
+            "corporate social responsibility",
+            "sustainable finance",
+            "green finance",
+            "climate finance",
+            "corporate disclosure",
+            "environmental disclosure",
+            "institutional investor",
+            "digital transformation",
+            "digital economy",
+            "fintech",
+            "data asset",
+            "supply chain",
+            "supply chain resilience",
+            "green innovation",
+            "environmental governance",
+            "information spillover",
+            "disclosure spillover",
+            "peer disclosure",
+            "information externality",
+        )
+        self.assertEqual(expected, DEFAULT_OPENALEX_SEARCH_TERMS)
         self.assertEqual(DEFAULT_OPENALEX_SEARCH_TERMS, parse_openalex_search_terms(None))
-        self.assertIn("accounting", DEFAULT_OPENALEX_SEARCH_TERMS)
-        self.assertIn("financial reporting", DEFAULT_OPENALEX_SEARCH_TERMS)
-        self.assertIn("climate finance", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertIn("information spillover", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertIn("disclosure spillover", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertIn("peer disclosure", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertIn("information externality", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertNotIn("sustainability", DEFAULT_OPENALEX_SEARCH_TERMS)
+        self.assertNotIn("artificial intelligence", DEFAULT_OPENALEX_SEARCH_TERMS)
+
+    def test_new_disclosure_terms_are_quoted_in_openalex_query(self):
+        query = build_openalex_search_query(
+            (
+                "environmental disclosure",
+                "information spillover",
+                "peer disclosure",
+                "information externality",
+            )
+        )
+        self.assertEqual(
+            '"environmental disclosure" OR "information spillover" OR '
+            '"peer disclosure" OR "information externality"',
+            query,
+        )
 
     def test_empty_env_falls_back_to_defaults(self):
         self.assertEqual(DEFAULT_OPENALEX_SEARCH_TERMS, parse_openalex_search_terms(""))
@@ -154,10 +203,30 @@ class OpenAlexIngestTests(unittest.TestCase):
         self.assertEqual("*", kwargs["params"]["cursor"])
         self.assertEqual(DEFAULT_PER_PAGE, kwargs["params"]["per-page"])
         self.assertEqual(
-            "from_publication_date:2026-08-20,to_publication_date:2026-08-23,has_abstract:true",
+            "from_publication_date:2026-08-20,to_publication_date:2026-08-23,"
+            "has_abstract:true,type:article|preprint|review|report",
             kwargs["params"]["filter"],
         )
         self.assertEqual("secret-key", kwargs["params"]["api_key"])
+
+    def test_production_page_cap_and_research_work_types(self):
+        self.assertEqual(2, DEFAULT_MAX_PAGES)
+        self.assertEqual(
+            ("article", "preprint", "review", "report"),
+            DEFAULT_OPENALEX_WORK_TYPES,
+        )
+        for excluded in (
+            "software",
+            "dataset",
+            "editorial",
+            "peer-review",
+            "dissertation",
+            "book",
+            "book-chapter",
+            "other",
+            "conference-paper",
+        ):
+            self.assertNotIn(excluded, DEFAULT_OPENALEX_WORK_TYPES)
 
     def test_cursor_pagination_until_next_cursor_is_empty(self):
         session = FakeSession(
@@ -422,11 +491,48 @@ class OpenAlexIngestTests(unittest.TestCase):
                             str(output),
                             "--status-file",
                             str(status),
+                            "--max-pages",
+                            "5",
                         ]
                     )
             self.assertEqual(0, exit_code)
+            self.assertEqual(5, client_class.call_args.kwargs["max_pages"])
             self.assertEqual(candidate, json.loads(output.read_text(encoding="utf-8")))
             self.assertEqual("ok", json.loads(status.read_text(encoding="utf-8"))["status"])
+
+    def test_cli_truncated_result_is_successful_bounded_exit(self):
+        fake_result = OpenAlexFetchResult(
+            status="truncated",
+            start_date="2026-08-20",
+            end_date="2026-08-23",
+            pages=2,
+            works=[openalex_work()],
+            candidates=[{"id": "openalex:W1", "source": "openalex"}],
+            truncated=True,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "papers.jsonl"
+            status = Path(temp_dir) / "status.json"
+            with patch(
+                "daily_arxiv.daily_arxiv.openalex_client.OpenAlexClient"
+            ) as client_class:
+                client_class.return_value.fetch_candidates.return_value = fake_result
+                exit_code = openalex_main(
+                    [
+                        "--start-date",
+                        "2026-08-20",
+                        "--end-date",
+                        "2026-08-23",
+                        "--output",
+                        str(output),
+                        "--status-file",
+                        str(status),
+                        "--max-pages",
+                        "2",
+                    ]
+                )
+            self.assertEqual(0, exit_code)
+            self.assertEqual("truncated", json.loads(status.read_text(encoding="utf-8"))["status"])
 
     def test_normal_workflow_uses_openalex_only_and_keeps_downstream(self):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -458,7 +564,9 @@ class OpenAlexIngestTests(unittest.TestCase):
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn('python -m daily_arxiv.daily_arxiv.same_day_merge subtract', workflow)
         self.assertIn('python -m daily_arxiv.daily_arxiv.same_day_merge merge', workflow)
+        self.assertIn('--history-language "$language"', workflow)
         self.assertIn('export FILTER_KEYWORDS="${{ vars.FILTER_KEYWORDS }}"', workflow)
+        self.assertIn('MAX_AI_PAPERS_PER_RUN: ${{ vars.MAX_AI_PAPERS_PER_RUN }}', workflow)
         self.assertIn('python enhance.py --data ../data/${today}_new.jsonl', workflow)
 
 

@@ -570,6 +570,50 @@ class SourceMergeTests(unittest.TestCase):
             self.assertTrue((history_dir / "2026-08-22.jsonl").exists())
             self.assertEqual("2026-08-23", resolve_run_date("2026-08-23").isoformat())
 
+    def test_history_language_ignores_deferred_raw_candidates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            data_dir = root / "work" / "data"
+            history_dir = root / "history" / "data"
+            data_dir.mkdir(parents=True)
+            history_dir.mkdir(parents=True)
+
+            deferred = arxiv_record(
+                paper_id="deferred-id",
+                doi="10.1234/deferred.1",
+            )
+            processed = arxiv_record(
+                paper_id="processed-id",
+                doi="10.1234/processed.1",
+            )
+            write_jsonl(
+                [deferred, processed],
+                data_dir / "2026-08-23.jsonl",
+            )
+            write_jsonl([deferred], history_dir / "2026-08-22.jsonl")
+            write_jsonl(
+                [processed],
+                history_dir / "2026-08-22_AI_enhanced_Chinese.jsonl",
+            )
+
+            status = perform_deduplication(
+                run_date="2026-08-23",
+                data_dir=data_dir,
+                history_dir=history_dir,
+                history_language="Chinese",
+            )
+
+            self.assertEqual("has_new_content", status)
+            remaining = [
+                json.loads(line)
+                for line in (data_dir / "2026-08-23.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(["deferred-id"], [row["id"] for row in remaining])
+            self.assertTrue((history_dir / "2026-08-22.jsonl").exists())
+
     def test_filter_and_ai_boundary_can_use_one_fake_call_per_canonical_paper(self):
         result = merge_sources(
             [arxiv_record(title="Pulsar paper", summary="pulsar abstract")],

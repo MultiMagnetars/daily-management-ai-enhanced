@@ -1,5 +1,6 @@
 import ast
 import os
+import sys
 import unittest
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -17,12 +18,19 @@ helper_nodes = [
     node
     for node in source_tree.body
     if isinstance(node, ast.FunctionDef)
-    and node.name in {"parse_filter_keywords", "filter_papers_by_keywords"}
+    and node.name in {
+        "parse_filter_keywords",
+        "filter_papers_by_keywords",
+        "parse_max_ai_papers",
+        "apply_ai_paper_cap",
+    }
 ]
 helper_namespace = {
     "Dict": Dict,
     "List": List,
+    "MAX_AI_PAPERS_PER_RUN": 20,
     "Optional": Optional,
+    "sys": sys,
     "Tuple": Tuple,
 }
 exec(
@@ -35,6 +43,8 @@ exec(
 )
 parse_filter_keywords = helper_namespace["parse_filter_keywords"]
 filter_papers_by_keywords = helper_namespace["filter_papers_by_keywords"]
+parse_max_ai_papers = helper_namespace["parse_max_ai_papers"]
+apply_ai_paper_cap = helper_namespace["apply_ai_paper_cap"]
 
 
 def paper(paper_id, title="", summary=""):
@@ -133,6 +143,70 @@ class KeywordFilterTests(unittest.TestCase):
 
         self.assertEqual([], filtered)
         self.assertEqual({"black hole": 0}, counts)
+
+    def test_management_second_layer_terms_match_title_and_abstract(self):
+        papers = [
+            paper(
+                "spillover",
+                title="Information Spillover and Disclosure Spillover",
+            ),
+            paper("peer", summary="Peer firm disclosure changes the information environment."),
+            paper("externality", summary="Information externality affects capital allocation."),
+            paper("mda", title="MD&A Disclosure Quality"),
+            paper("ai", title="Medical Artificial Intelligence Applications"),
+            paper("noise", title="A topic outside the configured vocabulary"),
+        ]
+        keywords = parse_filter_keywords(
+            "information spillover,disclosure spillover,peer firm disclosure,"
+            "information externality,MD&A disclosure,artificial intelligence"
+        )
+
+        filtered, counts = filter_papers_by_keywords(papers, keywords)
+
+        self.assertEqual(
+            ["spillover", "peer", "externality", "mda", "ai"],
+            [item["id"] for item in filtered],
+        )
+        self.assertEqual(1, counts["information spillover"])
+        self.assertEqual(1, counts["disclosure spillover"])
+        self.assertEqual(1, counts["peer firm disclosure"])
+        self.assertEqual(1, counts["information externality"])
+        self.assertEqual(1, counts["MD&A disclosure"])
+        self.assertEqual(1, counts["artificial intelligence"])
+
+    def test_ai_cap_parser_falls_back_for_unset_invalid_and_nonpositive_values(self):
+        for raw_value in (None, "", "   ", "not-an-int", "0", "-3"):
+            with self.subTest(raw_value=raw_value):
+                self.assertEqual(20, parse_max_ai_papers(raw_value))
+        self.assertEqual(7, parse_max_ai_papers(" 7 "))
+
+    def test_ai_cap_preserves_order_and_returns_deferred_records(self):
+        papers = [paper(str(index), title=f"Paper {index}") for index in range(30)]
+
+        selected, deferred = apply_ai_paper_cap(papers, 20)
+
+        self.assertEqual([str(index) for index in range(20)], [item["id"] for item in selected])
+        self.assertEqual([str(index) for index in range(20, 30)], [item["id"] for item in deferred])
+
+    def test_ai_cap_keeps_all_records_when_limit_is_large(self):
+        papers = [paper("1"), paper("2")]
+        selected, deferred = apply_ai_paper_cap(papers, 20)
+        self.assertEqual(papers, selected)
+        self.assertEqual([], deferred)
+
+    def test_ai_cap_is_after_filter_and_before_ai_processing(self):
+        source = (ROOT_DIR / "ai" / "enhance.py").read_text(encoding="utf-8")
+        main_source = source[source.index("def main():") :]
+        filter_position = main_source.index("filter_papers_by_keywords(data, keywords)")
+        cap_position = main_source.index("apply_ai_paper_cap(filtered_data, max_ai_papers)")
+        ai_position = main_source.index("process_all_items(")
+
+        self.assertLess(filter_position, cap_position)
+        self.assertLess(cap_position, ai_position)
+        self.assertIn("MAX_AI_PAPERS_PER_RUN", source)
+        self.assertIn("keyword_matched_count", source)
+        self.assertIn("ai_selected_count", source)
+        self.assertIn("ai_deferred_count", source)
 
 
 if __name__ == "__main__":
